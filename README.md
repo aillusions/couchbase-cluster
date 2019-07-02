@@ -17,7 +17,7 @@ OR
 
 https://github.com/gruntwork-io/terraform-aws-couchbase
 
-cd provisioning/terraform-aws-couchbase-master
+cd provisioning/terraform-aws-couchbase
 
 export AWS_DEFAULT_REGION=eu-west-1
 
