@@ -1,0 +1,277 @@
+#!/bin/bash
+
+set -e
+
+readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly BASH_COMMONS_DIR="/opt/gruntwork/bash-commons"
+
+if [[ ! -d "$BASH_COMMONS_DIR" ]]; then
+  echo "ERROR: this script requires that bash-commons is installed in $BASH_COMMONS_DIR. See https://github.com/gruntwork-io/bash-commons for more info."
+  exit 1
+fi
+
+source "$BASH_COMMONS_DIR/log.sh"
+source "$BASH_COMMONS_DIR/assert.sh"
+source "$BASH_COMMONS_DIR/string.sh"
+source "$BASH_COMMONS_DIR/os.sh"
+
+readonly ENTERPRISE_EDITION="enterprise"
+readonly COMMUNITY_EDITION="community"
+readonly DEFAULT_EDITION="$ENTERPRISE_EDITION"
+
+readonly DEFAULT_SYNC_GATEWAY_ENTERPRISE_VERSION="2.0.0"
+readonly DEFAULT_SYNC_GATEWAY_ENTERPRISE_MD5_CHECKSUM_UBUNTU_16_04="a11cf149a7f64acb7368e1a18c85ebe7"
+readonly DEFAULT_SYNC_GATEWAY_ENTERPRISE_MD5_CHECKSUM_AMAZON_LINUX="d2f77e426e299fa08857e4cf7dbe4d77"
+
+readonly DEFAULT_SYNC_GATEWAY_COMMUNITY_VERSION="2.0.0"
+readonly DEFAULT_SYNC_GATEWAY_COMMUNITY_MD5_CHECKSUM_UBUNTU_16_04="9549ae33868e21f94bf2a6ef73e8eb0b"
+readonly DEFAULT_SYNC_GATEWAY_COMMUNITY_MD5_CHECKSUM_AMAZON_LINUX="a4a6e56b6ea5444e723a001eb5bad04a"
+
+readonly SHA256_CHECKSUM_TYPE="sha256"
+readonly MD5_CHECKSUM_TYPE="md5"
+
+readonly DEFAULT_SYNC_GATEWAY_DIR="/opt/couchbase-sync-gateway"
+readonly DEFAULT_SYNC_GATEWAY_BIN_DIR="$DEFAULT_SYNC_GATEWAY_DIR/bin"
+readonly DEFAULT_SYNC_GATEWAY_BINARY_PATH="$DEFAULT_SYNC_GATEWAY_BIN_DIR/sync_gateway"
+
+readonly COUCHBASE_COMMONS_SRC_DIR="$SCRIPT_DIR/../couchbase-commons"
+readonly COUCHBASE_COMMONS_INSTALL_DIR="/opt/couchbase-commons"
+
+readonly DEFAULT_SYNC_GATEWAY_HOME="/home/sync_gateway"
+readonly DEFAULT_SYNC_GATEWAY_CONFIG_PATH="$DEFAULT_SYNC_GATEWAY_HOME/sync_gateway.json"
+readonly DEFAULT_SYNC_GATEWAY_LOGS_DIR="$DEFAULT_SYNC_GATEWAY_HOME/logs"
+readonly DEFAULT_SYNC_GATEWAY_DATA_DIR="$DEFAULT_SYNC_GATEWAY_HOME/data"
+readonly DEFAULT_SYNC_GATEWAY_SYSTEMD_UNIT_PATH="/lib/systemd/system/sync_gateway.service"
+readonly DEFAULT_SYNC_GATEWAY_USER=sync_gateway
+
+function print_usage {
+  echo
+  echo "Usage: install-sync-gateway [options]"
+  echo
+  echo "This script can be used to install Couchbase Sync Gateway and its dependencies. This script has been tested with Ubuntu 16.04 and Amazon Linux 2."
+  echo
+  echo "Options:"
+  echo
+  echo -e "  --edition\t\tThe edition of Sync Gateway to install. Must be one of: $ENTERPRISE_EDITION, $COMMUNITY_EDITION. Default: $DEFAULT_EDITION."
+  echo -e "  --version\t\tThe version of Sync Gateway to install. Default: $DEFAULT_SYNC_GATEWAY_ENTERPRISE_VERSION."
+  echo -e "  --checksum\t\tThe checksum of the Sync Gateway package. Required if --version is specified. You can get it from the downloads page of the Couchbase website."
+  echo -e "  --checksum-type\tThe type of checksum in --checksum. Required if --version is specified. Must be one of: $SHA256_CHECKSUM_TYPE, $MD5_CHECKSUM_TYPE."
+  echo -e "  --config\t\tConfigure Sync Gateway to use the specified JSON config file."
+  echo
+  echo "Example:"
+  echo
+  echo "  install-sync-gateway --edition $ENTERPRISE_EDITION --config my-custom-config.json"
+}
+
+function install_sync_gateway_on_ubuntu {
+  local readonly edition="$1"
+  local readonly version="$2"
+  local readonly checksum="$3"
+  local readonly checksum_type="$4"
+
+  log_info "Installing Sync Gateway $version ($edition edition) on Ubuntu"
+
+  local readonly filepath="couchbase-sync-gateway-${edition}_${version}_x86_64.deb"
+  local readonly url="https://packages.couchbase.com/releases/couchbase-sync-gateway/$version/$filepath"
+
+  log_info "Downloading Sync Gateway from $url to $filepath"
+  curl --location --silent --fail --show-error -O "$url"
+
+  os_validate_checksum "$filepath" "$checksum" "$checksum_type"
+
+  # Install Sync Gateway, but configure it to NOT start on boot. This allows the run-sync-gateway script to configure
+  # Sync Gateway, including what ports to use, and THEN boot it up.
+  log_info "Installing SyncGateway from $filepath"
+  sudo dpkg -i "$filepath"
+  sudo systemctl stop sync_gateway
+  sudo systemctl disable sync_gateway
+
+  log_info "Cleaning up $filepath"
+  rm -f "$filepath"
+}
+
+function install_sync_gateway_on_amazon_linux {
+  local readonly edition="$1"
+  local readonly version="$2"
+  local readonly checksum="$3"
+  local readonly checksum_type="$4"
+
+  log_info "Installing Couchbase $version ($edition edition) on Amazon Linux"
+
+  local readonly filepath="couchbase-sync-gateway-${edition}_${version}_x86_64.rpm"
+  local readonly url="https://packages.couchbase.com/releases/couchbase-sync-gateway/$version/$filepath"
+
+  log_info "Downloading Sync Gateway from $url to $filepath"
+  curl --location --silent --fail --show-error -O "$url"
+
+  os_validate_checksum "$filepath" "$checksum" "$checksum_type"
+
+  # Install Sync Gateway, but configure it to NOT start on boot. This allows the run-sync-gateway script to configure
+  # Sync Gateway, including what ports to use, and THEN boot it up.
+  log_info "Installing SyncGateway from $filepath"
+  sudo rpm --install "$filepath"
+
+  # These commands sometimes exit with an error for no obvious reason, so we just ignore the error...
+  set +e
+  sudo chkconfig sync_gateway off
+  sudo service sync_gateway stop
+  set -e
+
+  # Remove the original log paths to reduce confusion
+  sudo rm -rf /var/log/sync_gateway
+
+  # Create systemd unit to run Sync Gateway. The installer creates an init.d script, but that doesn't work correctly
+  # in Docker, and it doesn't auto-restart Sync Gateway if it crashes, so this is a more effective option.
+  log_info "Creating systemd unit for Sync Gateway in $DEFAULT_SYNC_GATEWAY_SYSTEMD_UNIT_PATH."
+  sudo tee "$DEFAULT_SYNC_GATEWAY_SYSTEMD_UNIT_PATH" > /dev/null << EOF
+[Unit]
+Description=Couchbase Sync Gateway server
+After=syslog.target
+After=network.target
+
+[Service]
+LimitNOFILE=65535
+Environment="RUNBASE=$DEFAULT_SYNC_GATEWAY_HOME"
+Environment="GATEWAY=$DEFAULT_SYNC_GATEWAY_BINARY_PATH"
+Environment="CONFIG=$DEFAULT_SYNC_GATEWAY_CONFIG_PATH"
+Environment="LOGS=$DEFAULT_SYNC_GATEWAY_LOGS_DIR"
+Environment="NAME=$DEFAULT_SYNC_GATEWAY_USER"
+Type=simple
+User=sync_gateway
+WorkingDirectory=$DEFAULT_SYNC_GATEWAY_HOME
+ExecStartPre=/bin/mkdir -p $DEFAULT_SYNC_GATEWAY_LOGS_DIR
+ExecStartPre=/bin/chown -R $DEFAULT_SYNC_GATEWAY_USER:$DEFAULT_SYNC_GATEWAY_USER $DEFAULT_SYNC_GATEWAY_LOGS_DIR
+ExecStartPre=/bin/mkdir -p $DEFAULT_SYNC_GATEWAY_DATA_DIR
+ExecStartPre=/bin/chown -R $DEFAULT_SYNC_GATEWAY_USER:$DEFAULT_SYNC_GATEWAY_USER $DEFAULT_SYNC_GATEWAY_DATA_DIR
+ExecStart=/bin/bash -c '\${GATEWAY} \${CONFIG} >> \${LOGS}/\${NAME}_access.log 2>> \${LOGS}/\${NAME}_error.log'
+Restart=on-failure
+
+# Give a reasonable amount of time for the server to start up/shut down
+TimeoutSec=60
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+  log_info "Cleaning up $filepath"
+  rm -f "$filepath"
+}
+
+function install_config {
+  local readonly config="$1"
+
+  if [[ ! -z "$config" ]]; then
+    log_info "Configuring Sync Gateway to use config file $config by copying it to $DEFAULT_SYNC_GATEWAY_CONFIG_PATH"
+    sudo cp "$config" "$DEFAULT_SYNC_GATEWAY_CONFIG_PATH"
+  fi
+}
+
+function install_run_sync_gateway_script {
+  local readonly dest_dir="$1"
+  local readonly src="$SCRIPT_DIR/../run-sync-gateway/run-sync-gateway"
+  local readonly dest="$dest_dir/run-sync-gateway"
+
+  log_info "Copying $src to $dest"
+  sudo cp "$src" "$dest"
+  sudo chmod +x "$dest"
+}
+
+function install_bash_commons {
+  local readonly src_dir="$1"
+  local readonly dest_dir="$2"
+
+  log_info "Copying $src_dir to $dest_dir"
+  sudo cp -r "$src_dir" "$dest_dir"
+}
+
+function install {
+  local edition="$DEFAULT_EDITION"
+  local version
+  local checksum
+  local checksum_type
+  local config
+
+  while [[ $# > 0 ]]; do
+    local key="$1"
+
+    case "$key" in
+      --edition)
+        assert_not_empty "$key" "$2"
+        assert_value_in_list "$key" "$2" "$ENTERPRISE_EDITION" "$COMMUNITY_EDITION"
+        edition="$2"
+        shift
+        ;;
+      --version)
+        assert_not_empty "$key" "$2"
+        version="$2"
+        shift
+        ;;
+      --checksum)
+        assert_not_empty "$key" "$2"
+        checksum="$2"
+        shift
+        ;;
+      --checksum-type)
+        assert_not_empty "$key" "$2"
+        assert_value_in_list "$key" "$2" "$SHA256_CHECKSUM_TYPE" "$MD5_CHECKSUM_TYPE"
+        checksum_type="$2"
+        shift
+        ;;
+      --config)
+        assert_not_empty "$key" "$2"
+        config="$2"
+        shift
+        ;;
+      --help)
+        print_usage
+        exit
+        ;;
+      *)
+        log_error "Unrecognized argument: $key"
+        print_usage
+        exit 1
+        ;;
+    esac
+
+    shift
+  done
+
+  assert_is_installed "curl"
+
+  if [[ ! -z "$version" && -z "$checksum" ]]; then
+    log_error "You must specify the --checksum parameter when specifying the --version parameter. You can find the checksums on the Couchbase downloads page."
+    exit 1
+  fi
+
+  if [[ -z "$version" ]]; then
+    if [[ "$edition" == "$COMMUNITY_EDITION" ]]; then
+      version="$DEFAULT_SYNC_GATEWAY_COMMUNITY_VERSION"
+      checksum=$(os_is_amazon_linux && echo -n "$DEFAULT_SYNC_GATEWAY_COMMUNITY_MD5_CHECKSUM_AMAZON_LINUX" || echo -n "$DEFAULT_SYNC_GATEWAY_COMMUNITY_MD5_CHECKSUM_UBUNTU_16_04")
+      checksum_type="$MD5_CHECKSUM_TYPE"
+    else
+      version="$DEFAULT_SYNC_GATEWAY_ENTERPRISE_VERSION"
+      checksum=$(os_is_amazon_linux && echo -n "$DEFAULT_SYNC_GATEWAY_ENTERPRISE_MD5_CHECKSUM_AMAZON_LINUX" || echo -n "$DEFAULT_SYNC_GATEWAY_ENTERPRISE_MD5_CHECKSUM_UBUNTU_16_04")
+      checksum_type="$MD5_CHECKSUM_TYPE"
+    fi
+  fi
+
+  log_info "Starting Sync Gateway install..."
+
+  if os_is_ubuntu "16.04"; then
+    install_sync_gateway_on_ubuntu "$edition" "$version" "$checksum" "$checksum_type"
+  elif os_is_amazon_linux "2"; then
+    install_sync_gateway_on_amazon_linux "$edition" "$version" "$checksum" "$checksum_type"
+  else
+    log_error "This script only supports Ubuntu 16.04 and Amazon Linux 2."
+    exit 1
+  fi
+
+  install_config "$config"
+  install_run_sync_gateway_script "$DEFAULT_SYNC_GATEWAY_BIN_DIR"
+  install_bash_commons "$COUCHBASE_COMMONS_SRC_DIR" "$COUCHBASE_COMMONS_INSTALL_DIR"
+
+  log_info "Sync Gateway installed successfully!"
+}
+
+install "$@"
+
