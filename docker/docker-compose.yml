@@ -1,0 +1,29 @@
+version: '3.5'
+
+services:
+
+  # http://localhost:8091
+  # Cluster:  test-cluster
+  # Bucket:   defaultBucket
+  # Admin:    admin / qwerty
+  # User:     db-user / db-user-password
+  cb-couchbase:
+    image: couchbase:6.0.1
+    container_name: cb-couchbase-srv
+    restart: always
+    ports:
+      - 8091-8094:8091-8094
+      - 11210:11210
+    volumes:
+      - cb_couchbase_data:/opt/couchbase/var
+    networks:
+      - cb-network
+
+networks:
+  cb-network:
+    name: cb-network
+
+
+volumes:
+  cb_couchbase_data:
+    name: cb_couchbase_data
