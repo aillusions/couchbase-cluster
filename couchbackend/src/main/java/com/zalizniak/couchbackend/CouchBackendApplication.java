@@ -29,7 +29,7 @@ public class CouchBackendApplication implements CommandLineRunner {
 
     private final AtomicLong sentAmount = new AtomicLong();
 
-    private static final int NEW_RECORDS_PER_SECOND = 100;
+    private static final int NEW_RECORDS_PER_SECOND = 10;
 
     @Scheduled(fixedDelay = 1000 / NEW_RECORDS_PER_SECOND)
     public void bsendBSchedule() {
