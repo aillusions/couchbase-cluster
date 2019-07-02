@@ -42,7 +42,7 @@ public class CouchbaseIntegrationService {
         CouchbaseCluster cluster = CouchbaseCluster.create(clusterAddress).authenticate(username, password);
         Bucket bucket = cluster.openBucket(bucketName);
 
-        N1qlQueryResult result = bucket.query(N1qlQuery.simple("SELECT DISTINCT(country) FROM `travel-sample` WHERE type = 'airline' LIMIT 10"));
+        N1qlQueryResult result = bucket.query(N1qlQuery.simple("select * from defaultBucket"));
 
         for (N1qlQueryRow row : result) {
             System.out.println(row.value());

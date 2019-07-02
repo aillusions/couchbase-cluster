@@ -14,6 +14,7 @@ class CouchBackendApplicationTests {
     void contextLoads() {
         couchbaseIntegrationService.addNewRecord("helloworld");
         couchbaseIntegrationService.getRecord("helloworld");
+        couchbaseIntegrationService.queryRecord();
     }
 
 }

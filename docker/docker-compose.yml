@@ -7,6 +7,8 @@ services:
   # Bucket:   defaultBucket
   # Admin:    admin / qwerty
   # User:     db-user / db-user-password
+  # CREATE PRIMARY INDEX `#primaryDefaultBucket` ON `defaultBucket`
+  # select * from defaultBucket
   cb-couchbase:
     image: couchbase:6.0.1
     container_name: cb-couchbase-srv
