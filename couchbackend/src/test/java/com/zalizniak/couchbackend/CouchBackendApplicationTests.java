@@ -8,13 +8,13 @@ import org.springframework.boot.test.context.SpringBootTest;
 class CouchBackendApplicationTests {
 
     @Autowired
-    private CouchbaseIntegrationService couchbaseIntegrationService;
+    private CouchbaseHelloDao couchbaseHelloDao;
 
     @Test
     void shouldPerformBasicOperations() {
-        couchbaseIntegrationService.addNewRecord("helloworld");
-        couchbaseIntegrationService.getRecord("helloworld");
-        couchbaseIntegrationService.queryRecord();
+        couchbaseHelloDao.addNewRecord("helloworld");
+        couchbaseHelloDao.getRecord("helloworld");
+        couchbaseHelloDao.queryRecord();
     }
 
     /**
@@ -23,9 +23,9 @@ class CouchBackendApplicationTests {
     @Test
     void createOperationPerformance() {
         long start = System.currentTimeMillis();
-        long numberToAdd = 100_000;
+        long numberToAdd = 10_000;
         for (int i = 0; i < numberToAdd; i++) {
-            couchbaseIntegrationService.addNewRecord("helloworld-" + i);
+            couchbaseHelloDao.addNewRecord("helloworld-" + i);
         }
 
         System.out.println("Added: "  + numberToAdd + " in " + (System.currentTimeMillis() - start) + " ms.");
