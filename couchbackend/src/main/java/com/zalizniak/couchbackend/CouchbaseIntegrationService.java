@@ -9,6 +9,13 @@ import com.couchbase.client.java.query.N1qlQueryResult;
 import com.couchbase.client.java.query.N1qlQueryRow;
 import org.springframework.stereotype.Service;
 
+import javax.annotation.PostConstruct;
+import javax.annotation.PreDestroy;
+
+/**
+ * It is very important that cluster and bucket instances are created during startup and are then reused until the application shuts down.
+ * Connection setup is expensive and the SDK is designed to be thread safe and can be efficiently used across all your application threads.
+ */
 @Service
 public class CouchbaseIntegrationService {
 
@@ -18,36 +25,35 @@ public class CouchbaseIntegrationService {
     private String clusterAddress = "127.0.0.1";
     private String bucketName = "defaultBucket";
 
-    public void addNewRecord(String id) {
-        CouchbaseCluster cluster = CouchbaseCluster.create(clusterAddress).authenticate(username, password);
-        Bucket bucket = cluster.openBucket(bucketName);
+    private CouchbaseCluster cluster;
+    private Bucket bucket;
 
+    @PostConstruct
+    public void init() {
+        cluster = CouchbaseCluster.create(clusterAddress).authenticate(username, password);
+        bucket = cluster.openBucket(bucketName);
+    }
+
+    @PreDestroy
+    public void shutDown() {
+        cluster.disconnect();
+    }
+
+    public void addNewRecord(String id) {
         JsonObject content = JsonObject.create().put("hello", "world");
         JsonDocument inserted = bucket.upsert(JsonDocument.create(id, content));
-
-        cluster.disconnect();
     }
 
     public void getRecord(String id) {
-        CouchbaseCluster cluster = CouchbaseCluster.create(clusterAddress).authenticate(username, password);
-        Bucket bucket = cluster.openBucket(bucketName);
-
         JsonDocument found = bucket.get(id);
         System.out.println("Couchbase is the best database in the " + found.content().getString("hello"));
-
-        cluster.disconnect();
     }
 
     public void queryRecord() {
-        CouchbaseCluster cluster = CouchbaseCluster.create(clusterAddress).authenticate(username, password);
-        Bucket bucket = cluster.openBucket(bucketName);
-
         N1qlQueryResult result = bucket.query(N1qlQuery.simple("select * from defaultBucket"));
 
         for (N1qlQueryRow row : result) {
             System.out.println(row.value());
         }
-
-        cluster.disconnect();
     }
 }
