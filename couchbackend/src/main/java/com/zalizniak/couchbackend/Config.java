@@ -6,11 +6,13 @@ import com.couchbase.client.java.CouchbaseCluster;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * It is very important that cluster and bucket instances are created during startup and are then reused until the application shuts down.
  * Connection setup is expensive and the SDK is designed to be thread safe and can be efficiently used across all your application threads.
  */
+@EnableScheduling
 @Configuration
 public class Config {
 
