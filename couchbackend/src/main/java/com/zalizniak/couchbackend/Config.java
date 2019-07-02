@@ -3,6 +3,7 @@ package com.zalizniak.couchbackend;
 import com.couchbase.client.java.Bucket;
 import com.couchbase.client.java.Cluster;
 import com.couchbase.client.java.CouchbaseCluster;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -16,11 +17,14 @@ public class Config {
     private String username = "db-user";
     private String password = "db-user-password";
 
-    private String hostName = "127.0.0.1";
+    @Value("#{environment.COUCHBASE_NODE_ADDR}")
+    private String hostName;
+
     private String bucketName = "defaultBucket";
 
     @Bean
     public Cluster couchbaseCluster() {
+        System.out.println("COUCHBASE_NODE_ADDR: " + hostName);
         return CouchbaseCluster.create(hostName).authenticate(username, password);
     }
 

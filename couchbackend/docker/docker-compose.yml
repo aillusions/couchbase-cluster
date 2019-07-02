@@ -1,0 +1,17 @@
+version: '3.5'
+
+services:
+
+  cb-backend:
+    container_name: cb-backend-srv
+    build:
+      context: ../
+      dockerfile: ./docker/Dockerfile
+    environment:
+      COUCHBASE_NODE_ADDR: "192.168.16.4"
+    networks:
+      - cb-network
+
+networks:
+  cb-network:
+    name: cb-network

@@ -4,9 +4,9 @@ services:
 
   # https://docs.couchbase.com/server/4.5/install/docker-deploy-multi-node-cluster.html
 
-  # docker inspect --format '{{ .NetworkSettings.IPAddress }}' cb-couchbase-srv-1
-  # docker inspect --format '{{ .NetworkSettings.IPAddress }}' cb-couchbase-srv-2
-  # docker inspect --format '{{ .NetworkSettings.IPAddress }}' cb-couchbase-srv-3
+  # docker inspect --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' cb-couchbase-srv-1
+  # docker inspect --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' cb-couchbase-srv-2
+  # docker inspect --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' cb-couchbase-srv-3
 
   # http://localhost:8091
   # Cluster:  test-cluster
@@ -31,6 +31,8 @@ services:
     container_name: cb-couchbase-srv-2
     volumes:
       - cb_couchbase_data_2:/opt/couchbase/var
+    depends_on:
+      - cb-couchbase-1
     networks:
       - cb-network
 
@@ -39,6 +41,8 @@ services:
     container_name: cb-couchbase-srv-3
     volumes:
       - cb_couchbase_data_3:/opt/couchbase/var
+    depends_on:
+      - cb-couchbase-1
     networks:
       - cb-network
 
@@ -46,7 +50,7 @@ networks:
   cb-network:
     name: cb-network
 
-
+# docker volume rm cb_couchbase_data_1 cb_couchbase_data_2 cb_couchbase_data_3
 volumes:
   cb_couchbase_data_1:
     name: cb_couchbase_data_1
@@ -67,3 +71,7 @@ volumes:
 #    >> cb-couchbase-srv-2 has address 172.22.0.3
 #  host cb-couchbase-srv-3
 #    >> cb-couchbase-srv-3 has address 172.22.0.4
+
+
+# docker exec -it cb-couchbase-srv-1 cbq
+#   \CONNECT
