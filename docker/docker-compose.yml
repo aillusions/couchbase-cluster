@@ -2,6 +2,12 @@ version: '3.5'
 
 services:
 
+  # https://docs.couchbase.com/server/4.5/install/docker-deploy-multi-node-cluster.html
+
+  # docker inspect --format '{{ .NetworkSettings.IPAddress }}' cb-couchbase-srv-1
+  # docker inspect --format '{{ .NetworkSettings.IPAddress }}' cb-couchbase-srv-2
+  # docker inspect --format '{{ .NetworkSettings.IPAddress }}' cb-couchbase-srv-3
+
   # http://localhost:8091
   # Cluster:  test-cluster
   # Bucket:   defaultBucket
@@ -9,15 +15,30 @@ services:
   # User:     db-user / db-user-password
   # CREATE PRIMARY INDEX `#primaryDefaultBucket` ON `defaultBucket`
   # select * from defaultBucket limit 100
-  cb-couchbase:
+  cb-couchbase-1:
     image: couchbase:6.0.1
-    container_name: cb-couchbase-srv
-    restart: always
+    container_name: cb-couchbase-srv-1
     ports:
       - 8091-8094:8091-8094
       - 11210:11210
     volumes:
-      - cb_couchbase_data:/opt/couchbase/var
+      - cb_couchbase_data_1:/opt/couchbase/var
+    networks:
+      - cb-network
+
+  cb-couchbase-2:
+    image: couchbase:6.0.1
+    container_name: cb-couchbase-srv-2
+    volumes:
+      - cb_couchbase_data_2:/opt/couchbase/var
+    networks:
+      - cb-network
+
+  cb-couchbase-3:
+    image: couchbase:6.0.1
+    container_name: cb-couchbase-srv-3
+    volumes:
+      - cb_couchbase_data_3:/opt/couchbase/var
     networks:
       - cb-network
 
@@ -27,5 +48,22 @@ networks:
 
 
 volumes:
-  cb_couchbase_data:
-    name: cb_couchbase_data
+  cb_couchbase_data_1:
+    name: cb_couchbase_data_1
+  cb_couchbase_data_2:
+    name: cb_couchbase_data_2
+  cb_couchbase_data_3:
+    name: cb_couchbase_data_3
+
+
+
+# docker exec -it cb-couchbase-srv-2 bash
+#  apt-get update
+#  apt-get install telnet
+#  apt-get install host
+#  telnet cb-couchbase-srv-2 8091
+#    >> Connected to cb-couchbase-srv-2
+#  host cb-couchbase-srv-2
+#    >> cb-couchbase-srv-2 has address 172.22.0.3
+#  host cb-couchbase-srv-3
+#    >> cb-couchbase-srv-3 has address 172.22.0.4
