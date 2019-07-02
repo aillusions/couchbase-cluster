@@ -23,7 +23,7 @@ class CouchBackendApplicationTests {
     @Test
     void createOperationPerformance() {
         long start = System.currentTimeMillis();
-        long numberToAdd = 10_000;
+        long numberToAdd = 1_000;
         for (int i = 0; i < numberToAdd; i++) {
             couchbaseHelloDao.addNewRecord("helloworld-" + i);
         }

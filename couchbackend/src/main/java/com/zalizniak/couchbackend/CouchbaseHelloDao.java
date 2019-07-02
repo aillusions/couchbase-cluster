@@ -27,7 +27,7 @@ public class CouchbaseHelloDao {
     }
 
     public void queryRecord() {
-        N1qlQueryResult result = couchbaseBucket.query(N1qlQuery.simple("select * from defaultBucket"));
+        N1qlQueryResult result = couchbaseBucket.query(N1qlQuery.simple("select * from defaultBucket limit 10"));
 
         for (N1qlQueryRow row : result) {
             System.out.println(row.value());
