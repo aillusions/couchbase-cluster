@@ -43,3 +43,8 @@ Outputs:
       local readonly test_bucket_name="test-bucket"
 
 terraform destroy
+
+
+
+cd ./provisioning/terraform-aws-couchbase/examples/couchbase-ami
+packer build -only=ubuntu-ami -var edition=enterprise couchbase.json

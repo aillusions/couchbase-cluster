@@ -20,7 +20,7 @@
 variable "ami_id" {
   description = "The ID of the AMI to run in the cluster. This should be an AMI built from the Packer template under examples/couchbase-ami/couchbase.json. Set to null to use one of the example AMIs we have published publicly."
   type        = string
-  default     = null
+  default     = "ami-01ca05022bf074a3f"
 }
 
 variable "cluster_name" {
